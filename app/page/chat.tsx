@@ -76,53 +76,67 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="w-3xl h-screen flex flex-col p-4">
-      <div className="my-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">DeepSeek AI 聊天</h1>
-        <button
-          type="button"
-          onClick={() => signOut({ callbackUrl: '/login' })}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
-        >
-          退出登录
-        </button>
-      </div>
-
-      {/* 消息区域 */}
-      <div className="flex-1 bg-gray-50 rounded-xl p-4 overflow-y-auto flex flex-col gap-3">
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            className={`max-w-[80%] whitespace-pre-wrap px-4 py-3 rounded-2xl ${msg.role === 'user'
-                ? 'bg-blue-600 text-white self-end'
-                : 'bg-white text-gray-800 self-start shadow-sm'
-              }`}
-          >
-            {msg.content}
+    <div className="h-screen w-full p-4 md:p-6">
+      <div className="mx-auto flex h-full w-full max-w-5xl flex-col rounded-2xl border border-zinc-200 bg-white/90 shadow-sm">
+        <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
+          <div>
+            <h1 className="text-xl font-semibold text-zinc-900 md:text-2xl">DeepSeek Chat</h1>
+            <p className="mt-1 text-xs text-zinc-500 md:text-sm">支持流式回复的 AI 助手</p>
           </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
+          >
+            退出登录
+          </button>
+        </div>
 
-      {/* 输入框 */}
-      <form onSubmit={sendMessage} className="mt-4 flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="输入你的问题..."
-          disabled={loading}
-          className="flex-1 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="bg-blue-600 text-white px-5 py-3 rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
+        <div
+          ref={messagesEndRef}
+          className="flex-1 space-y-4 overflow-y-auto bg-gradient-to-b from-zinc-50 to-white px-4 py-5 md:px-6"
         >
-          {loading ? '发送中...' : '发送'}
-        </button>
-      </form>
-      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+          {messages.length === 0 ? (
+            <div className="mx-auto mt-16 max-w-md rounded-2xl border border-zinc-200 bg-white p-5 text-center text-zinc-500">
+              试试问我：帮我写一个注册登录接口，或者解释一段代码。
+            </div>
+          ) : null}
+
+          {messages.map((msg, index) => (
+            <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 md:max-w-[75%] md:text-base ${msg.role === 'user'
+                  ? 'rounded-br-md bg-blue-600 text-white shadow-sm'
+                  : 'rounded-bl-md border border-zinc-200 bg-white text-zinc-800'
+                  }`}
+              >
+                {msg.content || (msg.role === 'assistant' && loading ? '思考中...' : '')}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-zinc-100 px-4 py-4 md:px-6">
+          <form onSubmit={sendMessage} className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="输入你的问题，按回车发送..."
+              disabled={loading}
+              className="h-11 flex-1 rounded-xl border border-zinc-300 bg-white px-4 text-zinc-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
+            />
+            <button
+              type="submit"
+              disabled={loading || !input.trim()}
+              className="h-11 rounded-xl bg-blue-600 px-5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? '发送中' : '发送'}
+            </button>
+          </form>
+          {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+        </div>
+      </div>
     </div>
   );
 }
