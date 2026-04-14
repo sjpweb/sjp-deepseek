@@ -14,11 +14,25 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // 自动滚动到底部
   useEffect(() => {
     if (messagesEndRef.current) messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
   }, [messages]);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  const stopGenerating = () => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setLoading(false);
+    setError('已停止回答');
+  };
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,12 +44,15 @@ export default function ChatPage() {
     setMessages(newMessages);
     setInput('');
     setLoading(true);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: newMessages }),
+        signal: controller.signal,
       });
       if (res.status === 401) {
         setError('登录状态已失效，请重新登录');
@@ -68,9 +85,14 @@ export default function ChatPage() {
         );
       }
     } catch (err) {
-      console.error(err);
-      setError('请求异常，请稍后重试');
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError('已停止回答');
+      } else {
+        console.error(err);
+        setError('请求异常，请稍后重试');
+      }
     } finally {
+      abortControllerRef.current = null;
       setLoading(false);
     }
   };
@@ -126,13 +148,23 @@ export default function ChatPage() {
               disabled={loading}
               className="h-11 flex-1 rounded-xl border border-zinc-300 bg-white px-4 text-zinc-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
             />
-            <button
-              type="submit"
-              disabled={loading || !input.trim()}
-              className="h-11 rounded-xl bg-blue-600 px-5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? '发送中' : '发送'}
-            </button>
+            {loading ? (
+              <button
+                type="button"
+                onClick={stopGenerating}
+                className="h-11 rounded-xl bg-rose-600 px-5 text-sm font-medium text-white transition hover:bg-rose-700"
+              >
+                停止
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                className="h-11 rounded-xl bg-blue-600 px-5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                发送
+              </button>
+            )}
           </form>
           {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
         </div>
