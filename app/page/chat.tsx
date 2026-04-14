@@ -93,7 +93,7 @@ export default function ChatPage() {
         {messages.map((msg, index) => (
           <div
             key={index}
-            className={`max-w-[80%] px-4 py-3 rounded-2xl ${msg.role === 'user'
+            className={`max-w-[80%] whitespace-pre-wrap px-4 py-3 rounded-2xl ${msg.role === 'user'
                 ? 'bg-blue-600 text-white self-end'
                 : 'bg-white text-gray-800 self-start shadow-sm'
               }`}
