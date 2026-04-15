@@ -9,6 +9,7 @@ type Message = {
 };
 
 export type ChatProvider = 'deepseek' | 'zhipu';
+type MessagesByProvider = Record<ChatProvider, Message[]>;
 
 const PROVIDER_LABEL: Record<ChatProvider, string> = {
   deepseek: 'DeepSeek',
@@ -18,13 +19,24 @@ const PROVIDER_LABEL: Record<ChatProvider, string> = {
 const PROVIDER_STORAGE_KEY = 'chat-provider';
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesByProvider, setMessagesByProvider] = useState<MessagesByProvider>({
+    deepseek: [],
+    zhipu: [],
+  });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [provider, setProvider] = useState<ChatProvider>('deepseek');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const messages = messagesByProvider[provider];
+
+  const updateProviderMessages = (targetProvider: ChatProvider, nextMessages: Message[]) => {
+    setMessagesByProvider(prev => ({
+      ...prev,
+      [targetProvider]: nextMessages,
+    }));
+  };
 
   useEffect(() => {
     try {
@@ -67,9 +79,11 @@ export default function ChatPage() {
     if (!input.trim() || loading) return;
     setError('');
 
+    const activeProvider = provider;
+    const currentMessages = messagesByProvider[activeProvider];
     const userMsg: Message = { role: 'user', content: input };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    const newMessages = [...currentMessages, userMsg];
+    updateProviderMessages(activeProvider, newMessages);
     setInput('');
     setLoading(true);
     const controller = new AbortController();
@@ -79,7 +93,7 @@ export default function ChatPage() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages, provider }),
+        body: JSON.stringify({ messages: newMessages, provider: activeProvider }),
         signal: controller.signal,
       });
       if (res.status === 401) {
@@ -106,7 +120,7 @@ export default function ChatPage() {
       const decoder = new TextDecoder();
       let done = false;
       let answer = '';
-      setMessages([...newMessages, { role: 'assistant', content: '' }]);
+      updateProviderMessages(activeProvider, [...newMessages, { role: 'assistant', content: '' }]);
 
       while (!done) {
         const { value, done: d } = await reader.read();
@@ -115,11 +129,15 @@ export default function ChatPage() {
         const text = decoder.decode(value, { stream: true });
         answer += text;
 
-        setMessages(prev =>
-          prev.map((m, i) =>
-            i === prev.length - 1 ? { ...m, content: answer } : m
-          )
-        );
+        setMessagesByProvider(prev => {
+          const targetMessages = prev[activeProvider];
+          return {
+            ...prev,
+            [activeProvider]: targetMessages.map((m, i) =>
+              i === targetMessages.length - 1 ? { ...m, content: answer } : m
+            ),
+          };
+        });
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
