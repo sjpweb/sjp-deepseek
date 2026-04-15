@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -28,15 +29,78 @@ function resolveProvider(body: unknown): ChatProvider {
   return p === 'zhipu' ? 'zhipu' : 'deepseek';
 }
 
+function buildConversationTitle(content: string) {
+  const text = content.trim();
+  if (!text) return '新对话';
+  return text.length > 24 ? `${text.slice(0, 24)}...` : text;
+}
+
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  const userEmail = session?.user?.email?.trim().toLowerCase();
+  if (!userEmail) {
     return Response.json({ message: '未登录或登录已失效' }, { status: 401 });
   }
 
   const body = await req.json();
   const provider = resolveProvider(body);
-  const { messages } = body as { messages: OpenAI.Chat.ChatCompletionMessageParam[] };
+  const { messages, conversationId } = body as {
+    messages: OpenAI.Chat.ChatCompletionMessageParam[];
+    conversationId?: string;
+  };
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return Response.json({ message: '消息不能为空' }, { status: 400 });
+  }
+  if (!conversationId) {
+    return Response.json({ message: '缺少 conversationId' }, { status: 400 });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email: userEmail },
+    select: { id: true },
+  });
+  if (!user) {
+    return Response.json({ message: '用户不存在' }, { status: 401 });
+  }
+
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: conversationId, userId: user.id },
+    select: { id: true, title: true },
+  });
+  if (!conversation) {
+    return Response.json({ message: '会话不存在或无权限' }, { status: 404 });
+  }
+
+  const lastMessage = messages[messages.length - 1];
+  const latestUserMessage =
+    lastMessage?.role === 'user' && typeof lastMessage.content === 'string'
+      ? lastMessage.content.trim()
+      : '';
+  if (!latestUserMessage) {
+    return Response.json({ message: '最后一条消息必须是用户消息' }, { status: 400 });
+  }
+
+  const titleToSave =
+    conversation.title === '新对话' ? buildConversationTitle(latestUserMessage) : conversation.title;
+
+  await prisma.$transaction([
+    prisma.chatMessage.create({
+      data: {
+        conversationId: conversation.id,
+        role: 'user',
+        content: latestUserMessage,
+        provider,
+      },
+    }),
+    prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        title: titleToSave,
+        updatedAt: new Date(),
+      },
+    }),
+  ]);
 
   const cfg = PROVIDER_CONFIG[provider];
   const apiKey = process.env[cfg.apiKeyEnv];
@@ -63,13 +127,39 @@ export async function POST(req: Request) {
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
     async start(controller) {
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || '';
-        if (content) {
-          controller.enqueue(encoder.encode(content));
+      let answer = '';
+      try {
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          if (content) {
+            answer += content;
+            controller.enqueue(encoder.encode(content));
+          }
         }
+
+        if (answer.trim()) {
+          await prisma.$transaction([
+            prisma.chatMessage.create({
+              data: {
+                conversationId: conversation.id,
+                role: 'assistant',
+                content: answer,
+                provider,
+              },
+            }),
+            prisma.conversation.update({
+              where: { id: conversation.id },
+              data: {
+                updatedAt: new Date(),
+              },
+            }),
+          ]);
+        }
+
+        controller.close();
+      } catch (err) {
+        controller.error(err);
       }
-      controller.close();
     },
   });
 
