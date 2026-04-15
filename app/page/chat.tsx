@@ -80,7 +80,8 @@ export default function ChatPage() {
     if (!res.ok) {
       throw new Error('获取会话消息失败');
     }
-    const data = (await res.json()) as { messages: Array<{ role: string; content: string }> };
+    const data = (await res.json()) as { messages: Array<{ role: string; content: string; provider: ChatProvider }> };
+    setProvider(data.messages[0]?.provider)
     setMessages(
       data.messages
         .filter(m => m.role === 'user' || m.role === 'assistant')
