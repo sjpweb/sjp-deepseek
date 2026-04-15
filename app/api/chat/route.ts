@@ -5,10 +5,28 @@ import { authOptions } from '@/lib/auth';
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
-const openai = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: 'https://api.deepseek.com',
-});
+type ChatProvider = 'deepseek' | 'zhipu';
+
+const PROVIDER_CONFIG: Record<
+  ChatProvider,
+  { apiKeyEnv: 'DEEPSEEK_API_KEY' | 'ZHIPU_API_KEY'; baseURL: string; model: string }
+> = {
+  deepseek: {
+    apiKeyEnv: 'DEEPSEEK_API_KEY',
+    baseURL: 'https://api.deepseek.com',
+    model: 'deepseek-chat',
+  },
+  zhipu: {
+    apiKeyEnv: 'ZHIPU_API_KEY',
+    baseURL: 'https://open.bigmodel.cn/api/paas/v4/',
+    model: 'glm-4',
+  },
+};
+
+function resolveProvider(body: unknown): ChatProvider {
+  const p = (body as { provider?: string } | null)?.provider;
+  return p === 'zhipu' ? 'zhipu' : 'deepseek';
+}
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -16,10 +34,26 @@ export async function POST(req: Request) {
     return Response.json({ message: '未登录或登录已失效' }, { status: 401 });
   }
 
-  const { messages } = await req.json();
+  const body = await req.json();
+  const provider = resolveProvider(body);
+  const { messages } = body as { messages: OpenAI.Chat.ChatCompletionMessageParam[] };
 
-  const stream = await openai.chat.completions.create({
-    model: 'deepseek-chat',
+  const cfg = PROVIDER_CONFIG[provider];
+  const apiKey = process.env[cfg.apiKeyEnv];
+  if (!apiKey) {
+    return Response.json(
+      { message: `未配置环境变量 ${cfg.apiKeyEnv}，无法使用该模型` },
+      { status: 503 }
+    );
+  }
+
+  const client = new OpenAI({
+    apiKey,
+    baseURL: cfg.baseURL,
+  });
+
+  const stream = await client.chat.completions.create({
+    model: cfg.model,
     messages,
     stream: true,
     temperature: 0.7,

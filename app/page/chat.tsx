@@ -8,13 +8,41 @@ type Message = {
   content: string;
 };
 
+export type ChatProvider = 'deepseek' | 'zhipu';
+
+const PROVIDER_LABEL: Record<ChatProvider, string> = {
+  deepseek: 'DeepSeek',
+  zhipu: '智谱 GLM-4',
+};
+
+const PROVIDER_STORAGE_KEY = 'chat-provider';
+
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [provider, setProvider] = useState<ChatProvider>('deepseek');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(PROVIDER_STORAGE_KEY) as ChatProvider | null;
+      if (saved === 'deepseek' || saved === 'zhipu') setProvider(saved);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const onProviderChange = (next: ChatProvider) => {
+    setProvider(next);
+    try {
+      localStorage.setItem(PROVIDER_STORAGE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  };
 
   // 自动滚动到底部
   useEffect(() => {
@@ -51,11 +79,20 @@ export default function ChatPage() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ messages: newMessages, provider }),
         signal: controller.signal,
       });
       if (res.status === 401) {
         setError('登录状态已失效，请重新登录');
+        return;
+      }
+      if (res.status === 503) {
+        try {
+          const data = (await res.json()) as { message?: string };
+          setError(data.message ?? '当前模型不可用，请检查服务端配置');
+        } catch {
+          setError('当前模型不可用，请检查服务端配置');
+        }
         return;
       }
       if (!res.ok) {
@@ -100,18 +137,34 @@ export default function ChatPage() {
   return (
     <div className="h-screen w-full p-4 md:p-6">
       <div className="mx-auto flex h-full w-full max-w-5xl flex-col rounded-2xl border border-zinc-200 bg-white/90 shadow-sm">
-        <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4">
           <div>
-            <h1 className="text-xl font-semibold text-zinc-900 md:text-2xl">DeepSeek Chat</h1>
-            <p className="mt-1 text-xs text-zinc-500 md:text-sm">支持流式回复的 AI 助手</p>
+            <h1 className="text-xl font-semibold text-zinc-900 md:text-2xl">AI 对话</h1>
+            <p className="mt-1 text-xs text-zinc-500 md:text-sm">
+              当前模型：{PROVIDER_LABEL[provider]} · 支持流式回复
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: '/login' })}
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
-          >
-            退出登录
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-sm text-zinc-600">
+              <span className="whitespace-nowrap">模型</span>
+              <select
+                value={provider}
+                onChange={e => onProviderChange(e.target.value as ChatProvider)}
+                disabled={loading}
+                className="h-9 rounded-lg border border-zinc-300 bg-white px-2 text-zinc-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:opacity-50"
+              >
+                <option value="deepseek">DeepSeek</option>
+                <option value="zhipu">智谱 GLM</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
+            >
+              退出登录
+            </button>
+          </div>
         </div>
 
         <div
