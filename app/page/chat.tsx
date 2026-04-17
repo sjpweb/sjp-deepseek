@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { signOut } from 'next-auth/react';
+import { message } from 'antd'
 
 type Message = {
   role: 'user' | 'assistant';
@@ -235,7 +236,8 @@ export default function ChatPage() {
       throw new Error('删除会话失败');
     }
     const data = await res.json();
-    console.log(data?.message)
+    message.success(data?.message)
+    refreshConversations();
     setActiveConversationId('');
     setMessages([]);
   };
@@ -282,7 +284,7 @@ export default function ChatPage() {
                   <p className="truncate text-sm font-medium">{item.title}</p>
                   <p className="mt-1 text-xs text-zinc-500">{item._count.messages} 条消息</p>
                   <span
-                    className='cursor-pointer hidden group-hover:flex absolute right-[12px] top-[18px] bg-[#da2f35] text-[#fff] flex items-center justify-center w-[36px] h-[20px] rounded-[6px] border border-zinc-300 text-[12px]'
+                    className='cursor-pointer hidden group-hover:flex absolute right-[12px] top-[18px] bg-[#da2f35] text-[#fff] flex items-center justify-center w-[36px] h-[20px] rounded-[6px] text-[12px]'
                     onClick={() => deleteConversation(item.id)}
                   >删除</span>
                 </button>

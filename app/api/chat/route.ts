@@ -10,7 +10,7 @@ import { prisma } from '@/lib/prisma';
 // 指定运行时为 Node.js
 export const runtime = 'nodejs';
 // 最大执行时长 30 秒
-export const maxDuration = 30;
+export const maxDuration = 300;
 
 // 定义支持的 AI 服务商类型：深度求索 / 智谱
 type ChatProvider = 'deepseek' | 'zhipu';
