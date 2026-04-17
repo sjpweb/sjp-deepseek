@@ -90,7 +90,10 @@ export default function ChatPage() {
   };
 
   const createConversation = async () => {
-    const res = await fetch('/api/conversations', { method: 'POST' });
+    const res = await fetch('/api/conversations', {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create' }),
+      method: 'POST' });
     if (!res.ok) {
       throw new Error('创建会话失败');
     }
@@ -223,6 +226,20 @@ export default function ChatPage() {
     }
   };
 
+  const deleteConversation = async (conversationId: string) => {
+    const res = await fetch('/api/conversations', {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', id: conversationId }),
+      method: 'POST' });
+    if (!res.ok) {
+      throw new Error('删除会话失败');
+    }
+    const data = await res.json();
+    console.log(data?.message)
+    setActiveConversationId('');
+    setMessages([]);
+  };
+
   return (
     <div className="h-screen w-full p-4 md:p-6">
       <div className="mx-auto flex h-full w-full max-w-6xl overflow-hidden rounded-2xl border border-zinc-200 bg-white/90 shadow-sm">
@@ -257,13 +274,17 @@ export default function ChatPage() {
                   onClick={() => {
                     void selectConversation(item.id);
                   }}
-                  className={`w-full rounded-lg border px-3 py-2 text-left transition ${activeConversationId === item.id
+                  className={`group relative w-full rounded-lg border px-3 py-2 text-left transition ${activeConversationId === item.id
                     ? 'border-blue-200 bg-blue-50 text-blue-700'
                     : 'border-transparent bg-white text-zinc-700 hover:border-zinc-200'
                     }`}
                 >
                   <p className="truncate text-sm font-medium">{item.title}</p>
                   <p className="mt-1 text-xs text-zinc-500">{item._count.messages} 条消息</p>
+                  <span
+                    className='cursor-pointer hidden group-hover:flex absolute right-[12px] top-[18px] bg-[#da2f35] text-[#fff] flex items-center justify-center w-[36px] h-[20px] rounded-[6px] border border-zinc-300 text-[12px]'
+                    onClick={() => deleteConversation(item.id)}
+                  >删除</span>
                 </button>
               ))
             )}
