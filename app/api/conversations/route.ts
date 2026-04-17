@@ -7,35 +7,49 @@ type ActionBody = {
   id?: string
 };
 
+// 缓存 getServerSession（非常关键！）
+const getSessionCached = async () => {
+  return await getServerSession(authOptions);
+};
+
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email?.trim().toLowerCase();
-  if (!email) {
-    return Response.json({ message: '未登录或登录已失效' }, { status: 401 });
-  }
+  try {
+    // 1. 获取会话（并行化空间不大，但必须保证最快）
+    const session = await getSessionCached();
+    const email = session?.user?.email?.trim().toLowerCase();
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true },
-  });
-  if (!user) {
-    return Response.json({ message: '用户不存在' }, { status: 401 });
-  }
+    if (!email) {
+      return Response.json({ message: "未登录或登录已失效" }, { status: 401 });
+    }
 
-  const conversations = await prisma.conversation.findMany({
-    where: { userId: user.id },
-    select: {
-      id: true,
-      title: true,
-      updatedAt: true,
-      _count: {
-        select: { messages: true },
+    // 2. 合并查询！！！把 user + conversations 一次查完（提速核心）
+    const userWithConversations = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        conversations: {
+          select: {
+            id: true,
+            title: true,
+            updatedAt: true,
+            _count: { select: { messages: true } },
+          },
+          orderBy: { updatedAt: "desc" },
+        },
       },
-    },
-    orderBy: { updatedAt: 'desc' },
-  });
+    });
 
-  return Response.json({ conversations });
+    if (!userWithConversations) {
+      return Response.json({ message: "用户不存在" }, { status: 404 });
+    }
+
+    return Response.json({
+      conversations: userWithConversations.conversations,
+    });
+  } catch (error) {
+    console.error("[CONVERSATION_GET]", error);
+    return Response.json({ message: "服务异常" }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
