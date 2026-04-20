@@ -65,6 +65,8 @@ async function tavilySearch(query: string) {
         query: query,
         search_depth: 'basic',
         max_results: 3,
+        language: "zh-CN",
+        include_domains: ["cn", "com.cn", "net.cn", "org.cn"],
       }),
     });
 
