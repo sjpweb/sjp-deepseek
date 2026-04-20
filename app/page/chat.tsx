@@ -2,7 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { signOut } from 'next-auth/react';
-import { message } from 'antd'
+import { GlobalOutlined } from '@ant-design/icons';
+import { message } from 'antd';
+import dynamic from 'next/dynamic';
+
+const Tooltip = dynamic(() => import('antd').then(mod => mod.Tooltip), { ssr: false });
 
 type Message = {
   role: 'user' | 'assistant';
@@ -32,6 +36,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [error, setError] = useState('');
+  const [enableSearch, setEnableSearch] = useState(false);
   const [provider, setProvider] = useState<ChatProvider>('deepseek');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -94,7 +99,8 @@ export default function ChatPage() {
     const res = await fetch('/api/conversations', {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'create' }),
-      method: 'POST' });
+      method: 'POST'
+    });
     if (!res.ok) {
       throw new Error('创建会话失败');
     }
@@ -173,6 +179,7 @@ export default function ChatPage() {
           messages: newMessages,
           provider: activeProvider,
           conversationId,
+          enableSearch,
         }),
         signal: controller.signal,
       });
@@ -231,7 +238,8 @@ export default function ChatPage() {
     const res = await fetch('/api/conversations', {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'delete', id: conversationId }),
-      method: 'POST' });
+      method: 'POST'
+    });
     if (!res.ok) {
       throw new Error('删除会话失败');
     }
@@ -340,7 +348,7 @@ export default function ChatPage() {
           </div>
 
           <div className="border-t border-zinc-100 px-4 py-4 md:px-6">
-            <form onSubmit={sendMessage} className="flex gap-2">
+            <form onSubmit={sendMessage} className="flex gap-2 items-center">
               <input
                 type="text"
                 value={input}
@@ -349,6 +357,16 @@ export default function ChatPage() {
                 disabled={loading}
                 className="h-11 flex-1 rounded-xl border border-zinc-300 bg-white px-4 text-zinc-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
               />
+
+              <Tooltip title="联网">
+                <div className='cursor-pointer' onClick={() => setEnableSearch(!enableSearch)}>
+                  <GlobalOutlined
+                    style={{
+                      color: enableSearch ? '#1677ff' : ''
+                    }} />
+                </div>
+              </Tooltip>
+
               {loading ? (
                 <button
                   type="button"

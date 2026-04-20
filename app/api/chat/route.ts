@@ -50,6 +50,33 @@ function buildConversationTitle(content: string) {
   return text.length > 24 ? `${text.slice(0, 24)}...` : text;
 }
 
+// ======================
+// ✅ Tavily 搜索函数（已集成）
+// ======================
+async function tavilySearch(query: string) {
+  try {
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        api_key: process.env.TAVILY_API_KEY,
+        query: query,
+        search_depth: 'basic',
+        max_results: 3,
+      }),
+    });
+
+    if (!res.ok) throw new Error('Tavily API 请求失败');
+    const data = await res.json();
+    return data.results || [];
+  } catch (err) {
+    console.error('搜索失败：', err);
+    return [];
+  }
+}
+
 /**
  * POST 接口：处理聊天请求
  * 1. 校验登录
@@ -73,9 +100,10 @@ export async function POST(req: Request) {
   // ==============================================
   const body = await req.json();
   const provider = resolveProvider(body); // 确定用哪个模型
-  const { messages, conversationId } = body as {
+  const { messages, conversationId, enableSearch } = body as {
     messages: OpenAI.Chat.ChatCompletionMessageParam[];
     conversationId?: string;
+    enableSearch?: boolean;
   };
 
   // ==============================================
@@ -149,9 +177,47 @@ export async function POST(req: Request) {
       },
     }),
   ]);
+  let messagesWithSearch: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages];
+  if (enableSearch) {
+    // ==============================================
+    // ✅ 9. 执行联网搜索（核心新增）
+    // ==============================================
+    const searchResults = await tavilySearch(latestUserMessage);
+    // ==============================================
+    // ✅ 10. 构造带搜索结果的新消息数组
+    // ==============================================
 
+    if (searchResults && searchResults.length > 0) {
+      // 拼接搜索内容
+      const searchContext = searchResults
+        .map(
+          (item: any, i: number) =>
+            `[搜索结果${i + 1}] ${item.title}\n内容：${item.content}\n来源：${item.url}`
+        )
+        .join('\n\n');
+
+      // 构建增强的用户问题（把搜索结果塞进去）
+      const enhancedUserMessage: OpenAI.Chat.ChatCompletionMessageParam = {
+        role: 'user',
+        content: `
+用户问题：${latestUserMessage}
+
+---
+以下是联网搜索到的实时信息，请基于这些信息回答：
+${searchContext}
+---
+
+请直接回答，不要编造信息。
+      `.trim(),
+      };
+
+      // 替换最后一条用户消息为增强版
+      messagesWithSearch = messagesWithSearch.slice(0, -1);
+      messagesWithSearch.push(enhancedUserMessage);
+    }
+  }
   // ==============================================
-  // 9. 读取对应服务商的 API Key
+  // 11. 读取对应服务商的 API Key
   // ==============================================
   const cfg = PROVIDER_CONFIG[provider];
   const apiKey = process.env[cfg.apiKeyEnv];
@@ -163,7 +229,7 @@ export async function POST(req: Request) {
   }
 
   // ==============================================
-  // 10. 创建 OpenAI 格式客户端（兼容国内大模型）
+  // 12. 创建 OpenAI 格式客户端（兼容国内大模型）
   // ==============================================
   const client = new OpenAI({
     apiKey,
@@ -171,35 +237,32 @@ export async function POST(req: Request) {
   });
 
   // ==============================================
-  // 11. 调用 AI 流式生成回答
+  // 13. 调用 AI 流式生成回答（使用带搜索的 messages）
   // ==============================================
   const stream = await client.chat.completions.create({
     model: cfg.model,
-    messages,
-    stream: true, // 开启流式输出
+    messages: messagesWithSearch, // ✅ 使用增强后的消息
+    stream: true,
     temperature: 0.7,
   });
 
   // ==============================================
-  // 12. 把流式 chunk 转成前端可接收的流
+  // 14. 把流式 chunk 转成前端可接收的流
   // ==============================================
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
     async start(controller) {
-      let answer = ''; // 拼接完整回答
+      let answer = '';
       try {
-        // 遍历流式 chunk
         for await (const chunk of stream) {
           const content = chunk.choices[0]?.delta?.content || '';
           if (content) {
             answer += content;
-            controller.enqueue(encoder.encode(content)); // 推送给前端
+            controller.enqueue(encoder.encode(content));
           }
         }
 
-        // ==============================================
-        // 13. 流式结束后，保存 AI 回答到数据库
-        // ==============================================
+        // 保存 AI 回答
         if (answer.trim()) {
           await prisma.$transaction([
             prisma.chatMessage.create({
@@ -224,7 +287,6 @@ export async function POST(req: Request) {
     },
   });
 
-  // 返回纯文本流给前端
   return new Response(readable, {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',

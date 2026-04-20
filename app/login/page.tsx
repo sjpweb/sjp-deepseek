@@ -25,7 +25,6 @@ export default function LoginPage() {
         redirect: false,
         callbackUrl: '/',
       });
-
       if (!result) {
         setMessage('登录失败，请稍后重试');
         return;
