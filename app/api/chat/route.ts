@@ -205,9 +205,7 @@ export async function POST(req: Request) {
 ---
 以下是联网搜索到的实时信息，请基于这些信息回答：
 ${searchContext}
----
-
-请直接回答，不要编造信息。
+---不要编造信息。
       `.trim(),
       };
 
