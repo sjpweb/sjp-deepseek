@@ -1,6 +1,5 @@
 'use client';
 import { AntdRegistry } from '@ant-design/nextjs-registry'
-import { ConfigProvider } from 'antd'
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 

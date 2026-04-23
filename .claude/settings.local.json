@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed -i '379s/type=\"submit\"/type=\"primary\"/' app/page/chat.tsx)",
+      "Bash(sed -i '381d' app/page/chat.tsx)",
+      "Bash(sed -i \"6s/import { message, Button } from 'antd';/import { message } from 'antd';/\" app/page/chat.tsx)",
+      "Bash(sed -i \"9a\\\\\\\\const Button = dynamic\\(\\(\\) => import\\('antd'\\).then\\(mod => mod.Button\\), { ssr: false }\\);\" app/page/chat.tsx)"
+    ]
+  }
+}

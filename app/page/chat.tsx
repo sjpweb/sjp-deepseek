@@ -7,6 +7,7 @@ import { message } from 'antd';
 import dynamic from 'next/dynamic';
 
 const Tooltip = dynamic(() => import('antd').then(mod => mod.Tooltip), { ssr: false });
+const Button = dynamic(() => import('antd').then(mod => mod.Button), { ssr: false });
 
 type Message = {
   role: 'user' | 'assistant';
@@ -255,21 +256,20 @@ export default function ChatPage() {
       <div className="mx-auto flex h-full w-full max-w-6xl overflow-hidden rounded-2xl border border-zinc-200 bg-white/90 shadow-sm">
         <aside className="flex w-72 shrink-0 flex-col border-r border-zinc-100 bg-zinc-50/80">
           <div className="space-y-3 border-b border-zinc-100 p-4">
-            <button
-              type="button"
+            <Button
+              type="primary"
               disabled={loading}
               onClick={addChat}
-              className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+              block
             >
               + 新对话
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               onClick={() => signOut({ callbackUrl: '/login' })}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+              block
             >
               退出登录
-            </button>
+            </Button>
           </div>
           <div className="flex-1 space-y-2 overflow-y-auto p-3">
             {loadingConversations ? (
@@ -278,9 +278,8 @@ export default function ChatPage() {
               <p className="px-2 py-4 text-sm text-zinc-500">暂无历史会话，点击上方“新对话”开始。</p>
             ) : (
               conversations.map(item => (
-                <button
+                <div
                   key={item.id}
-                  type="button"
                   onClick={() => {
                     void selectConversation(item.id);
                   }}
@@ -295,7 +294,7 @@ export default function ChatPage() {
                     className='cursor-pointer hidden group-hover:flex absolute right-[12px] top-[18px] bg-[#da2f35] text-[#fff] flex items-center justify-center w-[36px] h-[20px] rounded-[6px] text-[12px]'
                     onClick={() => deleteConversation(item.id)}
                   >删除</span>
-                </button>
+                </div>
               ))
             )}
           </div>
@@ -368,21 +367,20 @@ export default function ChatPage() {
               </Tooltip>
 
               {loading ? (
-                <button
-                  type="button"
+                <Button
+                  type="primary"
                   onClick={stopGenerating}
-                  className="h-11 rounded-xl bg-rose-600 px-5 text-sm font-medium text-white transition hover:bg-rose-700"
+                  danger
                 >
                   停止
-                </button>
+                </Button>
               ) : (
-                <button
-                  type="submit"
+                <Button
+                  type="primary"
                   disabled={!input.trim()}
-                  className="h-11 rounded-xl bg-blue-600 px-5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   发送
-                </button>
+                </Button>
               )}
             </form>
             {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
